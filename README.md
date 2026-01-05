@@ -229,6 +229,152 @@ result = await sender.send_multi(
 )
 ```
 
+## CLI Usage
+
+```bash
+# Send text message
+webhook-push send dingtalk "https://oapi.dingtalk.com/robot/send?access_token=xxx" \
+    --content "Hello from CLI!"
+
+# Send Markdown message
+webhook-push send wecom "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" \
+    --type markdown \
+    --title "Report" \
+    --content "# Daily Report\n- Metric 1"
+
+# Send to multiple platforms
+webhook-push send-multi wecom dingtalk --content "Notification"
+
+# Send to all available platforms
+webhook-push send-auto --content "All platforms"
+
+# View platform info
+webhook-push info dingtalk
+```
+
+## Best Practices
+
+### 1. Use Markdown for Best Compatibility
+
+Markdown has good support across all platforms:
+
+```python
+message = UnifiedMessage(
+    content={
+        "type": "markdown",
+        "body": {
+            "content": """# Report
+
+## Summary
+- **Key Metric**: 128
+- Another metric
+
+> Important note
+
+[View Details](https://example.com)"""
+        }
+    }
+)
+```
+
+### 2. Handle Failures Gracefully
+
+```python
+result = await sender.send(message, "dingtalk", webhook_url)
+
+if not result.success:
+    if result.retry_suggested:
+        # Retry later
+        await retry_queue.add(message)
+    else:
+        # Log error
+        logger.error(f"Send failed: {result.error}")
+```
+
+### 3. Use Card Messages for Interaction
+
+Card messages provide a better user experience:
+
+```python
+message = UnifiedMessage(
+    content={
+        "type": "card",
+        "body": {
+            "card_type": "interactive",
+            "elements": [{"type": "div", "text": "Needs approval"}],
+            "actions": [
+                {"type": "button", "text": "Approve", "url": "...", "style": "primary"},
+                {"type": "button", "text": "Reject", "url": "..."}
+            ]
+        }
+    }
+)
+```
+
+### 4. Monitor Rate Limits
+
+Be aware of rate limits for each platform:
+
+| Platform | Rate Limit |
+|----------|------------|
+| WeCom | 20/min |
+| DingTalk | 20/min |
+| Feishu | No explicit limit |
+
+The sender automatically handles rate limit errors.
+
+## Development
+
+### Install Development Dependencies
+
+```bash
+poetry install
+```
+
+### Run Tests
+
+```bash
+pytest
+```
+
+### Code Quality
+
+```bash
+# Black formatting
+black src/ tests/
+
+# isort sorting
+isort src/ tests/
+
+# ruff check
+ruff check src/ tests/
+
+# mypy type checking
+mypy src/
+```
+
+## Project Structure
+
+```
+webhook-push/
+├── README.md                      # English documentation
+├── README_CN.md                  # Chinese documentation
+├── SKILL.md                      # Skill documentation
+├── pyproject.toml                # Project configuration
+├── references/                   # Reference documents
+│   ├── api-reference.md         # API reference
+│   ├── platform-docs.md         # Platform documentation links
+│   ├── webhook-push-skill-design.md        # Design specification
+│   └── webhook-push-unified-message-design.md # API design
+├── src/webhook_push/            # Python source code
+│   ├── models/                  # Data models
+│   ├── adapters/                # Platform adapters
+│   ├── converters/              # Message converters
+│   ├── sender/                  # Sender
+│   └── cli.py                   # CLI
+└── tests/                       # Tests
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -297,6 +443,152 @@ retry:
 - V2 webhook is recommended (more features)
 - V1 webhook only supports plain text
 - Rich interactive card support
+
+## CLI Usage
+
+```bash
+# Send text message
+webhook-push send dingtalk "https://oapi.dingtalk.com/robot/send?access_token=xxx" \
+    --content "Hello from CLI!"
+
+# Send Markdown message
+webhook-push send wecom "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" \
+    --type markdown \
+    --title "Report" \
+    --content "# Daily Report\n- Metric 1"
+
+# Send to multiple platforms
+webhook-push send-multi wecom dingtalk --content "Notification"
+
+# Send to all available platforms
+webhook-push send-auto --content "All platforms"
+
+# View platform info
+webhook-push info dingtalk
+```
+
+## Best Practices
+
+### 1. Use Markdown for Best Compatibility
+
+Markdown has good support across all platforms:
+
+```python
+message = UnifiedMessage(
+    content={
+        "type": "markdown",
+        "body": {
+            "content": """# Report
+
+## Summary
+- **Key Metric**: 128
+- Another metric
+
+> Important note
+
+[View Details](https://example.com)"""
+        }
+    }
+)
+```
+
+### 2. Handle Failures Gracefully
+
+```python
+result = await sender.send(message, "dingtalk", webhook_url)
+
+if not result.success:
+    if result.retry_suggested:
+        # Retry later
+        await retry_queue.add(message)
+    else:
+        # Log error
+        logger.error(f"Send failed: {result.error}")
+```
+
+### 3. Use Card Messages for Interaction
+
+Card messages provide a better user experience:
+
+```python
+message = UnifiedMessage(
+    content={
+        "type": "card",
+        "body": {
+            "card_type": "interactive",
+            "elements": [{"type": "div", "text": "Needs approval"}],
+            "actions": [
+                {"type": "button", "text": "Approve", "url": "...", "style": "primary"},
+                {"type": "button", "text": "Reject", "url": "..."}
+            ]
+        }
+    }
+)
+```
+
+### 4. Monitor Rate Limits
+
+Be aware of rate limits for each platform:
+
+| Platform | Rate Limit |
+|----------|------------|
+| WeCom | 20/min |
+| DingTalk | 20/min |
+| Feishu | No explicit limit |
+
+The sender automatically handles rate limit errors.
+
+## Development
+
+### Install Development Dependencies
+
+```bash
+poetry install
+```
+
+### Run Tests
+
+```bash
+pytest
+```
+
+### Code Quality
+
+```bash
+# Black formatting
+black src/ tests/
+
+# isort sorting
+isort src/ tests/
+
+# ruff check
+ruff check src/ tests/
+
+# mypy type checking
+mypy src/
+```
+
+## Project Structure
+
+```
+webhook-push/
+├── README.md                      # English documentation
+├── README_CN.md                  # Chinese documentation
+├── SKILL.md                      # Skill documentation
+├── pyproject.toml                # Project configuration
+├── references/                   # Reference documents
+│   ├── api-reference.md         # API reference
+│   ├── platform-docs.md         # Platform documentation links
+│   ├── webhook-push-skill-design.md        # Design specification
+│   └── webhook-push-unified-message-design.md # API design
+├── src/webhook_push/            # Python source code
+│   ├── models/                  # Data models
+│   ├── adapters/                # Platform adapters
+│   ├── converters/              # Message converters
+│   ├── sender/                  # Sender
+│   └── cli.py                   # CLI
+└── tests/                       # Tests
+```
 
 ## Contributing
 
