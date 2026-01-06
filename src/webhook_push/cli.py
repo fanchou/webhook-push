@@ -1,5 +1,7 @@
 """CLI entry point for webhook-push skill."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import sys
@@ -8,6 +10,7 @@ from typing import IO, Any, Optional
 import click
 
 from .adapters import default_registry
+from .config import load_config
 from .models import MessageContent, MessageMetadata, UnifiedMessage
 from .sender import MessageSender
 
@@ -41,7 +44,9 @@ def cli() -> None:
 
 @cli.command()
 @click.argument("platform")
-@click.argument("webhook_url")
+@click.argument("webhook_url", required=False)
+@click.option("--config", "-C", type=click.Path(exists=True), help="Path to config file")
+@click.option("--secret", "-s", help="Secret for signature verification (if required)")
 @click.option("--type", "msg_type", default="text", type=click.Choice(["text", "markdown"]))
 @click.option("--title", "-t", default=None, help="Message title")
 @click.option("--content", "-c", default=None, help="Message content")
@@ -49,7 +54,9 @@ def cli() -> None:
 @click.option("--json", "json_output", is_flag=True, help="Output result as JSON")
 def send(
     platform: str,
-    webhook_url: str,
+    webhook_url: Optional[str],
+    config: Optional[str],
+    secret: Optional[str],
     msg_type: str,
     title: Optional[str],
     content: Optional[str],
@@ -57,6 +64,26 @@ def send(
     json_output: bool
 ) -> None:
     """Send a message to a specific platform."""
+    # Try to load webhook URL from config if not provided
+    if not webhook_url:
+        try:
+            cfg = load_config(config)
+            if platform in cfg.platforms:
+                platform_config = cfg.platforms[platform]
+                webhook_url = platform_config.webhook_url
+                # Use secret from config if not provided via command line
+                if not secret:
+                    secret = platform_config.secret
+            else:
+                click.echo(f"Error: Platform '{platform}' not found in config", err=True)
+                sys.exit(1)
+        except FileNotFoundError:
+            click.echo(
+                "Error: webhook_url required (not provided and no config file found)",
+                err=True
+            )
+            sys.exit(1)
+
     # Read content from file or argument
     if file:
         actual_content = file.read()
@@ -70,6 +97,20 @@ def send(
     message = build_message(msg_type, actual_content, title)
 
     # Create sender and send
+    from webhook_push.adapters import DingTalkAdapter, FeishuAdapter
+
+    # If secret is provided via command line, create adapter with secret
+    if secret and platform == "feishu":
+        # Extract webhook_id from URL
+        webhook_id = webhook_url.split("/hook/")[-1].split("?")[0]
+        adapter = FeishuAdapter(webhook_id=webhook_id, secret=secret)
+        default_registry.register(adapter)
+    elif secret and platform == "dingtalk":
+        # Extract token from URL
+        token = webhook_url.split("access_token=")[-1] if "access_token=" in webhook_url else ""
+        adapter = DingTalkAdapter(access_token=token, secret=secret)
+        default_registry.register(adapter)
+
     sender = MessageSender()
     result = asyncio.run(sender.send(message, platform, webhook_url))
 

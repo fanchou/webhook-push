@@ -4,6 +4,8 @@ This module provides converters for transforming messages between different
 formats and platforms.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Any, Optional
 

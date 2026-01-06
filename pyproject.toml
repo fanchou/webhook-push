@@ -9,9 +9,9 @@ description = "Unified webhook messaging skill for WeCom, DingTalk, and Feishu p
 authors = ["Webhook Push Skill Team"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/your-org/webhook-push"
-repository = "https://github.com/your-org/webhook-push"
-documentation = "https://github.com/your-org/webhook-push/tree/main/docs"
+homepage = "https://github.com/fanchou/webhook-push"
+repository = "https://github.com/fanchou/webhook-push"
+documentation = "https://github.com/fanchou/webhook-push/tree/main/docs"
 keywords = ["webhook", "wecom", "dingtalk", "feishu", "messaging", "notification"]
 classifiers = [
     "Development Status :: 4 - Beta",

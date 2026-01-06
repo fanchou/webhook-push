@@ -21,8 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for @mentions in text messages
 - Multi-platform sending capabilities
 - Automatic platform selection based on configuration
+- **Feishu Signature Verification**: Added HMAC-SHA256 signature verification support for Feishu webhooks to enhance security
+- **Configuration Loader**: Added `ConfigLoader` class for loading configuration from YAML files
+- **CLI Config Support**: Added `--config` and `--secret` options to CLI for configuration file and signature support
 
 ### Fixed
+- **Feishu Message Format**: Fixed critical bug where `post` and `card` message content was incorrectly converted to string instead of keeping as JSON object
+- **Feishu Signature Algorithm**: Implemented correct HMAC-SHA256 signature algorithm following official Feishu documentation
+- **Feishu Bot Payloads**: Signatures moved into request body (`timestamp` + `sign`), post content uses Feishu `tag` schema, interactive cards output `msg_type=interactive` with `card` payload and pass-through of Feishu-native elements/actions, @all mentions use `<at user_id="all">`
 - **Template Card Support**: Added comprehensive WeCom template_card (text_notice, news_show) and DingTalk actionCard support
 - **DingTalk Signature**: Fixed signature URL encoding issue (双重编码 bug)
 - **WeCom Markdown**: Added auto-detection of tables to use markdown_v2 format

@@ -9,6 +9,7 @@ from webhook_push.adapters import (
     FeishuAdapter,
     WeComAdapter,
 )
+from webhook_push.config import ConfigLoader, load_config
 from webhook_push.models import (
     AutoSendResult,
     MessageContent,
@@ -46,4 +47,8 @@ __all__ = [
     "DingTalkAdapter",
     "FeishuAdapter",
     "AdapterRegistry",
+
+    # Config
+    "ConfigLoader",
+    "load_config",
 ]

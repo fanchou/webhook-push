@@ -4,7 +4,10 @@ This module implements the main message sending logic with retry support,
 rate limiting, and automatic platform selection.
 """
 
+from __future__ import annotations
+
 import asyncio
+import time
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any, Optional, Union, cast
@@ -16,6 +19,7 @@ from webhook_push.models import (
     AutoSendResult,
     MessageContent,
     MultiSendResult,
+    PlatformConfig,
     PlatformError,
     PlatformPayload,
     PlatformResponse,
@@ -80,10 +84,23 @@ class MessageSender:
                 )
             )
 
+        # Get a consistent timestamp for signature calculation
+        # This ensures the same timestamp is used for both signature and sending
+        current_timestamp = int(time.time())
+        if hasattr(adapter, '_timestamp_override'):
+            adapter._timestamp_override = current_timestamp
+
         # Use provided webhook URL if given
         if webhook_url:
             # Create a temporary adapter with the URL
-            adapter = self._create_adapter_with_url(platform, webhook_url)
+            new_adapter = self._create_adapter_with_url(platform, webhook_url)
+            # If the original adapter has a secret, copy it to the new adapter
+            if hasattr(adapter, '_secret') and adapter._secret and hasattr(new_adapter, '_secret'):
+                new_adapter._secret = adapter._secret
+            # Set consistent timestamp for signature
+            if hasattr(new_adapter, '_timestamp_override'):
+                new_adapter._timestamp_override = current_timestamp
+            adapter = new_adapter
 
         # Check support level
         support_level = adapter.supports(message)
@@ -312,15 +329,33 @@ class MessageSender:
             url = urllib.parse.urlunparse(url_parts)
 
         try:
-            response = await client.post(
-                url,
-                json=data,
-                headers=request_headers
-            )
+            # If data is already a string (pre-serialized JSON), send as content
+            if isinstance(data, str):
+                response = await client.post(
+                    url,
+                    content=data,
+                    headers={**request_headers, "Content-Type": "application/json"}
+                )
+            else:
+                response = await client.post(
+                    url,
+                    json=data,
+                    headers=request_headers
+                )
+
+            response_data = response.json()
+            # For Feishu, check if the response contains an error code
+            if response.status_code == 200 and isinstance(response_data, dict) and response_data.get('code') != 0:
+                # Feishu returns 200 but with error code in body
+                return PlatformResponse(
+                    status_code=response_data.get('code', response.status_code),
+                    body=response_data,
+                    headers=dict(response.headers)
+                )
 
             return PlatformResponse(
                 status_code=response.status_code,
-                body=response.json(),
+                body=response_data,
                 headers=dict(response.headers)
             )
         finally:
@@ -412,6 +447,39 @@ class MessageSender:
             # Extract ID from URL
             webhook_id = webhook_url.split("/hook/")[-1].split("?")[0]
             return FeishuAdapter(webhook_id)
+
+        raise ValueError(f"Unknown platform: {platform}")
+
+    def _create_adapter_from_config(
+        self,
+        platform: str,
+        config: PlatformConfig
+    ) -> PlatformAdapter:
+        """Create an adapter from platform configuration.
+
+        Args:
+            platform: Platform name
+            config: Platform configuration with webhook_url and optional secret
+
+        Returns:
+            PlatformAdapter instance
+        """
+        from webhook_push.adapters import DingTalkAdapter, FeishuAdapter, WeComAdapter
+
+        if platform == "wecom":
+            # Extract key from URL
+            key = config.webhook_url.split("key=")[-1] if "key=" in config.webhook_url else ""
+            return WeComAdapter(webhook_key=key)
+
+        elif platform == "dingtalk":
+            # Extract token from URL
+            token = config.webhook_url.split("access_token=")[-1] if "access_token=" in config.webhook_url else ""
+            return DingTalkAdapter(access_token=token, secret=config.secret)
+
+        elif platform == "feishu":
+            # Extract ID from URL
+            webhook_id = config.webhook_url.split("/hook/")[-1].split("?")[0]
+            return FeishuAdapter(webhook_id=webhook_id, secret=config.secret)
 
         raise ValueError(f"Unknown platform: {platform}")
 

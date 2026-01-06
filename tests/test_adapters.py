@@ -377,7 +377,47 @@ class TestFeishuAdapter:
         )
         payload = adapter.transform(message)
 
-        assert "<at id=all></at>" in payload.body["content"]["text"]
+        assert '<at user_id="all">' in payload.body["content"]["text"]
+
+    def test_transform_post_message(self):
+        """Test post (rich text) message transformation."""
+        adapter = FeishuAdapter(webhook_id="test_id")
+        message = UnifiedMessage(
+            content={
+                "type": "post",
+                "title": "Test Post",
+                "body": {"content": "Rich text content"}
+            }
+        )
+        payload = adapter.transform(message)
+
+        assert payload.body["msg_type"] == "post"
+        # Content should be a dict, not a string
+        assert isinstance(payload.body["content"], dict)
+        assert "post" in payload.body["content"]
+        assert payload.body["content"]["post"]["zh_cn"]["title"] == "Test Post"
+        # Elements should use tag-based format
+        assert payload.body["content"]["post"]["zh_cn"]["content"][0][0]["tag"] == "text"
+
+    def test_transform_card_message(self):
+        """Test card message transformation."""
+        adapter = FeishuAdapter(webhook_id="test_id")
+        message = UnifiedMessage(
+            content={
+                "type": "card",
+                "body": {
+                    "config": {"wide_screen_mode": True},
+                    "elements": [{"type": "div", "text": "Card content"}]
+                }
+            }
+        )
+        payload = adapter.transform(message)
+
+        assert payload.body["msg_type"] == "interactive"
+        assert "card" in payload.body
+        assert isinstance(payload.body["card"], dict)
+        assert "config" in payload.body["card"]
+        assert "elements" in payload.body["card"]
 
     def test_parse_success_response(self):
         """Test parsing successful response."""
@@ -409,6 +449,36 @@ class TestFeishuAdapter:
 
         assert info.max_requests == 100
         assert info.window_seconds == 60
+
+    def test_signature_with_secret(self):
+        """Test signature generation when secret is provided."""
+        adapter = FeishuAdapter(webhook_id="test_id", secret="test_secret")
+        message = UnifiedMessage(
+            content={"type": "text", "body": {"text": "Signed message"}}
+        )
+        payload = adapter.transform(message)
+
+        # New behavior: signature is placed in body as per Feishu doc
+        assert payload.headers is None
+        assert "timestamp" in payload.body
+        assert "sign" in payload.body
+        # Signature should be base64 encoded (in body.sign)
+        import base64
+        try:
+            base64.b64decode(payload.body["sign"])
+        except Exception:
+            pytest.fail("sign should be valid base64")
+
+    def test_no_signature_without_secret(self):
+        """Test that no signature is generated when secret is not provided."""
+        adapter = FeishuAdapter(webhook_id="test_id")
+        message = UnifiedMessage(
+            content={"type": "text", "body": {"text": "Unsigned message"}}
+        )
+        payload = adapter.transform(message)
+
+        # No headers should be present without secret
+        assert payload.headers is None
 
 
 class TestAdapterRegistry:

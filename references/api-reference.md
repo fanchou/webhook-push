@@ -221,3 +221,133 @@ message = UnifiedMessage(
     }
 )
 ```
+
+## Platform Adapters
+
+### FeishuAdapter
+
+Adapter for Feishu/Lark platform with signature verification support.
+
+```python
+from webhook_push import FeishuAdapter
+
+# Without signature (not recommended for production)
+adapter = FeishuAdapter(webhook_id="your-webhook-id")
+
+# With signature verification (recommended)
+adapter = FeishuAdapter(
+    webhook_id="your-webhook-id",
+    secret="your-signing-secret"
+)
+```
+
+**Constructor Parameters:**
+- `webhook_id` (str): The webhook ID from Feishu bot settings
+- `secret` (str, optional): Signing secret for HMAC-SHA256 verification
+
+**Signature Verification:**
+When `secret` is provided, the adapter will:
+1. Generate timestamp (current Unix timestamp)
+2. Create signature string: `timestamp + "\n" + json_body`
+3. Compute HMAC-SHA256 using key: `timestamp + "\n" + secret`
+4. Add headers:
+   - `X-Lark-Signature`: Base64-encoded signature
+   - `Timestamp`: Unix timestamp
+
+**Methods:**
+- `get_webhook_url()`: Returns the V2 webhook URL
+- `supports(message)`: Check if message type is supported
+- `transform(message)`: Transform to Feishu format with signature
+- `parse_response(response)`: Parse Feishu API response
+
+### DingTalkAdapter
+
+Adapter for DingTalk platform with signature verification support.
+
+```python
+from webhook_push import DingTalkAdapter
+
+adapter = DingTalkAdapter(
+    access_token="your-access-token",
+    secret="your-signing-secret"  # Optional
+)
+```
+
+**Signature Verification:**
+When `secret` is provided, signature is added to query parameters (not headers):
+- `timestamp`: Current Unix timestamp in milliseconds
+- `sign`: Base64-encoded HMAC-SHA256 signature
+
+### WeComAdapter
+
+Adapter for Enterprise WeChat platform.
+
+```python
+from webhook_push import WeComAdapter
+
+adapter = WeComAdapter(webhook_key="your-webhook-key")
+```
+
+**Note:** WeCom does not support signature verification for webhook messages.
+
+## Configuration
+
+### load_config(config_path=None)
+
+Load configuration from YAML file.
+
+```python
+from webhook_push import load_config
+
+# Load from default locations
+config = load_config()
+
+# Load from specific file
+config = load_config("/path/to/config.yaml")
+
+# Access platform configuration
+feishu_config = config.platforms.get("feishu")
+print(feishu_config.webhook_url)
+print(feishu_config.secret)  # Signature secret
+```
+
+**Default Config File Locations:**
+1. `webhook-push.yaml` (current directory)
+2. `webhook-push.yml` (current directory)
+3. `~/.webhook-push.yaml` (home directory)
+4. `~/.webhook-push.yml` (home directory)
+
+**Environment Variables:**
+Config values can be overridden with environment variables:
+- `FEISHU_WEBHOOK_URL`
+- `FEISHU_SECRET`
+- `DINGTALK_WEBHOOK_URL`
+- `DINGTALK_SECRET`
+- `WECOM_WEBHOOK_URL`
+
+## CLI Reference
+
+### send Command
+
+Send a message to a specific platform.
+
+```bash
+# Using command line arguments
+webhook-push send feishu "https://open.feishu.cn/open-apis/bot/v2/hook/xxx" \
+  --secret "your-secret" \
+  --content "Hello, Feishu!"
+
+# Using config file
+webhook-push send feishu \
+  --config webhook-push.yaml \
+  --content "Hello from config!"
+```
+
+**Options:**
+- `--config, -C`: Path to config file
+- `--secret, -s`: Signature verification secret
+- `--type, -t`: Message type (text, markdown)
+- `--title`: Message title (for markdown)
+- `--content, -c`: Message content
+- `--file, -f`: File containing message content
+- `--json`: Output result as JSON

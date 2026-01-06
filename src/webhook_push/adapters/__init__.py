@@ -5,6 +5,8 @@ Each adapter handles the translation between the unified message model and
 platform-specific APIs.
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import hmac
@@ -554,8 +556,10 @@ class FeishuAdapter(PlatformAdapter):
     def priority(self) -> int:
         return 3
 
-    def __init__(self, webhook_id: str):
+    def __init__(self, webhook_id: str, secret: Optional[str] = None, timestamp_override: Optional[int] = None):
         self._webhook_id = webhook_id
+        self._secret = secret
+        self._timestamp_override = timestamp_override
 
     def is_available(self) -> bool:
         return bool(self._webhook_id)
@@ -589,26 +593,30 @@ class FeishuAdapter(PlatformAdapter):
             if message.content.mentions:
                 for mention in message.content.mentions:
                     if mention.type == "all":
-                        text = f"<at id=all></at> {text}"
+                        text = f"<at user_id=\"all\">所有人</at> {text}"
                     elif mention.type == "user_id":
+                        display = mention.display_name or mention.value
                         text = text.replace(
-                            mention.display_name or mention.value,
-                            f"<at id='{mention.value}'></at>"
+                            display,
+                            f"<at user_id=\"{mention.value}\">{display}</at>"
                         )
             body["msg_type"] = "text"
             body["content"] = {"text": text}
 
         elif msg_type == "post":
+            # Sanitize markdown-like markers because Feishu post text does not render markdown
+            raw = body_content.get("content", "")
+            text_clean = self._sanitize_post_text(raw)
             body["msg_type"] = "post"
-            content = {
+            body["content"] = {
                 "post": {
                     "zh_cn": {
                         "title": message.content.title or "",
-                        "content": [[{"type": "text", "text": body_content.get("content", "")}]]
+                        # Each paragraph is a list of elements; use "tag" per Feishu bot spec
+                        "content": [[{"tag": "text", "text": text_clean}]]
                     }
                 }
             }
-            body["content"] = str(content).replace("'", '"')
 
         elif msg_type == MessageType.IMAGE:
             body["msg_type"] = "image"
@@ -616,8 +624,9 @@ class FeishuAdapter(PlatformAdapter):
 
         elif msg_type == MessageType.CARD:
             card = self._transform_card(body_content)
-            body["msg_type"] = "card"
-            body["content"] = str(card).replace("'", '"')
+            # Feishu custom bot uses msg_type "interactive" and payload key "card"
+            body["msg_type"] = "interactive"
+            body["card"] = card
 
         elif msg_type == MessageType.FILE:
             body["msg_type"] = "file"
@@ -626,7 +635,32 @@ class FeishuAdapter(PlatformAdapter):
                 "file_name": body_content.get("file_name", "")
             }
 
-        return PlatformPayload(body=body, warnings=warnings)
+        # Add signature if secret is configured
+        # According to Feishu doc: payload must include timestamp & sign fields (not headers)
+        # We keep headers=None to follow the doc; tests updated accordingly.
+        if self._secret:
+            timestamp = str(self._timestamp_override if self._timestamp_override else int(time.time()))
+
+            # Compute signature: key = timestamp + "\n" + secret, data = empty
+            string_to_sign = f"{timestamp}\n{self._secret}"
+            signature = hmac.new(
+                string_to_sign.encode("utf-8"),
+                b"",
+                digestmod=hashlib.sha256
+            ).digest()
+
+            body["timestamp"] = timestamp
+            body["sign"] = base64.b64encode(signature).decode("utf-8")
+
+        return PlatformPayload(body=body, headers=None, warnings=warnings)
+
+    @staticmethod
+    def _sanitize_post_text(text: str) -> str:
+        """Remove common markdown markers to avoid raw syntax in Feishu post."""
+        # Strip bold/italic markers
+        for marker in ["**", "__", "*", "_", "`"]:
+            text = text.replace(marker, "")
+        return text
 
     def _transform_card(self, card_body: dict[str, Any]) -> dict[str, Any]:
         """Transform card to Feishu format."""
@@ -643,6 +677,11 @@ class FeishuAdapter(PlatformAdapter):
 
         # Transform elements
         for elem in card_body.get("elements", []):
+            # If user already provides Feishu-style element (has tag), pass through
+            if "tag" in elem:
+                elements.append(elem)
+                continue
+
             elem_type = elem.get("type", "div")
             if elem_type == "div":
                 elements.append({
@@ -659,6 +698,11 @@ class FeishuAdapter(PlatformAdapter):
             actions_elem: dict[str, Any] = {"tag": "action", "actions": []}
             actions_list: list[dict[str, Any]] = []
             for action in card_body["actions"]:
+                # Pass through if already Feishu-style
+                if "tag" in action:
+                    actions_list.append(action)
+                    continue
+
                 action_obj: dict[str, Any] = {
                     "tag": "button",
                     "text": {"content": action.get("text", ""), "tag": "plain_text"},

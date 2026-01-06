@@ -270,6 +270,7 @@ platforms:
     secret: "xxx"
   feishu:
     webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxx"
+    secret: "xxx"  # 可选，启用签名验证增强安全性
 
 retry:
   max_retries: 3
@@ -309,6 +310,10 @@ retry:
 - 推荐使用 V2 Webhook（功能更丰富）
 - V1 Webhook 仅支持纯文本
 - 支持丰富的交互卡片
+- **签名验证**：支持 HMAC-SHA256 签名验证增强安全性（推荐启用）
+  - 在飞书群机器人设置中启用"签名校验"
+  - 获取签名密钥后配置到 `webhook-push.yaml` 的 `secret` 字段
+  - 签名通过请求头的 `X-Lark-Signature` 和 `Timestamp` 字段传递
 
 ## CLI 使用
 

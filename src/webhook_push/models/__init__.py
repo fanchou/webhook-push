@@ -5,6 +5,8 @@ differences, allowing a single interface to send messages to WeCom, DingTalk,
 and Feishu platforms.
 """
 
+from __future__ import annotations
+
 from typing import Any, Optional, Union
 
 from pydantic import BaseModel
@@ -301,7 +303,7 @@ class SendResult(BaseModel):
 class PlatformPayload(BaseModel):
     """Platform-specific payload after transformation."""
 
-    body: dict[str, Any]
+    body: Union[str, dict[str, Any]]
     headers: Optional[dict[str, str]] = None
     query: Optional[dict[str, str]] = None
     warnings: Optional[list[str]] = None

@@ -368,11 +368,21 @@ await sender.send(message, "dingtalk", webhook_url)
 # Via webhook URL
 webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_ID"
 
+# With signature verification (recommended)
+from webhook_push import FeishuAdapter
+
+adapter = FeishuAdapter(
+    webhook_id="YOUR_ID",
+    secret="YOUR_SECRET"  # Enable signature verification
+)
+
 message = UnifiedMessage(content={"type": "text", "body": {"text": "Hello Feishu!"}})
 await sender.send(message, "feishu", webhook_url)
 ```
 
 **Message Types**: text, post, image, file, card, audio
+
+**Note**: Supports HMAC-SHA256 signature verification for enhanced security (recommended)
 
 ## Environment Variables
 
@@ -382,6 +392,7 @@ WECOM_WEBHOOK_KEY=your-key
 DINGTALK_ACCESS_TOKEN=your-token
 DINGTALK_SECRET=your-secret
 FEISHU_WEBHOOK_ID=your-id
+FEISHU_SECRET=your-secret  # Optional, for signature verification
 ```
 
 ## CLI Usage
